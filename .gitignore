@@ -1,0 +1,23 @@
+node_modules/
+dist/
+output/
+DEVELOPMENT.md
+change_log.md
+# .pi-agent 内容按需跟踪：扩展登记与 MCP 配置（小、纯文本、跨机必需）随 git 走；
+# 其余（npm 依赖树含平台二进制、auth.json 密钥、各类缓存）继续忽略
+.pi-agent/*
+!.pi-agent/settings.json
+!.pi-agent/mcp-adapter.json
+!.pi-agent/npm/
+.pi-agent/npm/*
+!.pi-agent/npm/package.json
+!.pi-agent/npm/package-lock.json
+report/
+history_db/
+prompts/generated/
+workspaces/
+wordlists/*
+!wordlists/README.md
+*.tar
+*.tar.sha256
+.env

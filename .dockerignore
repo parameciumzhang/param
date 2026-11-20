@@ -1,0 +1,23 @@
+.git
+.gitignore
+# 构建 All-in-One 时按项目约定内嵌根目录 .env 与 .mcp.json；其他 env 文件仍排除。
+.env.*
+!.env.example
+node_modules
+dist
+.npm
+report
+history_db
+workspaces
+prompts/generated
+*.tar
+*.tar.sha256
+
+# 仅允许构建 Worker 扩展所需的锁定清单与静态配置。
+.pi-agent/*
+!.pi-agent/settings.json
+!.pi-agent/mcp-adapter.json
+!.pi-agent/npm/
+.pi-agent/npm/*
+!.pi-agent/npm/package.json
+!.pi-agent/npm/package-lock.json

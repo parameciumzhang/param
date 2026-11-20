@@ -1,0 +1,8 @@
+{
+  "packages": [
+    "npm:pi-mcp-adapter"
+  ],
+  "extensions": [
+    "-builtin:mcp"
+  ]
+}

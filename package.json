@@ -1,0 +1,42 @@
+{
+  "name": "param",
+  "version": "1.0.0",
+  "description": "Stateless multi-challenge CTF orchestrator on @earendil-works/pi-coding-agent + PostgreSQL",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "db:up": "docker compose up -d db",
+    "db:down": "docker compose down",
+    "db:reset": "docker compose down -v && docker compose up -d db",
+    "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.json",
+    "start": "node --enable-source-maps dist/orchestrator.js",
+    "orchestrate": "npm run build && npm run start --",
+    "pi:install": "npm run build && node --enable-source-maps dist/pi-install.js",
+    "selftest": "npm run build && node --enable-source-maps dist/runtime-selftest.js && node --enable-source-maps dist/selftest.js",
+    "runtime:test": "npm run build && node --enable-source-maps dist/runtime-selftest.js",
+    "mock:llm": "npm run build && node --enable-source-maps dist/mock/openai-mock.js",
+    "kali:setup": "npm run build && node --enable-source-maps dist/kali-setup.js",
+    "kali:image": "npm run build && node --enable-source-maps dist/kali-image.js",
+    "kali:export": "docker save -o param-kali-image.tar param-kali-ctf",
+    "kali:import": "docker load -i param-kali-image.tar",
+    "image:all-in-one": "docker build -f docker/all-in-one/Dockerfile -t param-ctf:local .",
+    "image:verify": "docker run --rm param-ctf:local --image-verify",
+    "image:export": "docker save -o param-ctf-all-in-one.tar param-ctf:local && sha256sum param-ctf-all-in-one.tar > param-ctf-all-in-one.tar.sha256",
+    "image:package": "npm run image:all-in-one && npm run image:export",
+    "e2e": "npm run build && node --enable-source-maps dist/e2e.js"
+  },
+  "dependencies": {
+    "@earendil-works/pi-coding-agent": "^1.4.0",
+    "dotenv": "^18.0.9",
+    "pg": "^8.23.1",
+    "typebox": "1.3.27"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "@types/pg": "^8.23.1",
+    "typescript": "^7.0.2"
+  }
+}
