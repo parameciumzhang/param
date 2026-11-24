@@ -175,6 +175,6 @@ npm run image:export        # 导出已构建的镜像及 SHA-256
 - 增加平台化（开发中）
 - 增加可控性
 - 增加危险操作hook
-- 针对真是攻防场景优化
+- 针对真实攻防场景优化
 
 ![wechat](assets/wechat-320.jpg)
