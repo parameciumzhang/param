@@ -117,6 +117,9 @@ async function main(): Promise<void> {
     const aWorker = readGeneratedPrompt("worker", a.challenge_id);
     ok(aPlanner.includes("A-GOAL-UNIQUE") && !aPlanner.includes("B-GOAL-UNIQUE"), "Planner 只含本题 goal");
     ok(!aPlanner.includes("a.ctf.test"), "Planner 不注入 asset");
+    ok(aPlanner.includes(`不超过 ${config.insertTaskMaxChars} 字符`) &&
+       aPlanner.includes(`不超过 ${config.insertTaskMaxNoteChars} 字符`) &&
+       !aPlanner.includes("{{MAX"), "Planner 任务长度应渲染为配置值且不残留占位符");
     ok(aWorker.includes("a.ctf.test") && !aWorker.includes("b.ctf.test"), "Worker 只含本题 asset");
     ok(!aWorker.includes("A-GOAL-UNIQUE"), "Worker 不注入 goal 正文");
     for (const tool of [...makePlannerTools(a.challenge_id).tools, ...makeWorkerTools(a.challenge_id, 1)]) {

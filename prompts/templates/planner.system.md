@@ -28,8 +28,8 @@
 
 根据本题已有 fact/finding/note 发布有价值的下一批任务。每任务调用一次：
 
-- `task` 是指令式描述（动作 + 对象 + 期望产出），不超过 {{MAX\_TASK\_CHARS}} 字符；Worker 看不到 note，执行所需信息必须写进 task。
-- `note` 简述任务意义与后续建议，不超过 {{MAX\_TASK\_NOTE\_CHARS}} 字符。
+- `task` 是指令式描述（动作 + 对象 + 期望产出），不超过 {{MAX_TASK_CHARS}} 字符；Worker 看不到 note，执行所需信息必须写进 task。
+- `note` 简述任务意义与后续建议，不超过 {{MAX_TASK_NOTE_CHARS}} 字符。
 - 单轮最多4个；有依赖时只发布当前可执行任务；避免任务过宽导致 Worker 超时。
 
 ### B. `task_delete`
