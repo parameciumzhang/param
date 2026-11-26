@@ -12,6 +12,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { config, syncModelsJson, llmForRole } from "./config.js";
 import { createMcpToolNamesExtension } from "./mcp-tool-names.js";
+import { createEmptyDocsExtension } from "./system-prompt.js";
 import { readGeneratedPrompt, stripCommentLines, type Role } from "./scripts.js";
 
 /**
@@ -65,6 +66,13 @@ export async function createFreshAgent(
   const skillsEnabled = opts.skills !== false;
   const roleSkillsDir = path.join(config.skillsDir, role);
   if (skillsEnabled) fs.mkdirSync(roleSkillsDir, { recursive: true });
+  // 空 docs 是四角色固定的上下文优化，不随 MCP/外部扩展开关禁用。
+  const inlineExtensions = [
+    { name: "param-empty-docs", factory: createEmptyDocsExtension() },
+    ...(opts.extensions
+      ? [{ name: "param-mcp-tool-names", factory: createMcpToolNamesExtension(config.agentDir) }]
+      : []),
+  ];
   const resourceLoader = new DefaultResourceLoader({
     cwd,
     agentDir: config.agentDir,
@@ -72,12 +80,9 @@ export async function createFreshAgent(
     // 角色提示词追加在 pi 默认系统提示词之后（addendum 段），不替换默认内容；
     // 发送前剥离整行 HTML 注释（role 标记等维护者元数据不进入模型上下文）
     appendSystemPrompt: [stripCommentLines(readGeneratedPrompt(role, opts.challengeId))],
-    // 扩展（pi install 装入 .pi-agent/ 的包，如 pi-mcp-adapter）：仅显式开启的角色加载
+    // 外部扩展（如 pi-mcp-adapter）按角色开关加载；内联 docs/MCP 名称扩展单独控制。
     noExtensions: !opts.extensions,
-    // 代理模式下额外注入服务器/工具名称；描述与 Schema 仍通过 mcp describe 按需加载。
-    extensionFactories: opts.extensions
-      ? [{ name: "param-mcp-tool-names", factory: createMcpToolNamesExtension(config.agentDir) }]
-      : [],
+    extensionFactories: inlineExtensions,
     // 禁用默认 skills 发现，仅显式加载本角色目录，保证各角色相互隔离
     noSkills: true,
     additionalSkillPaths: skillsEnabled ? [roleSkillsDir] : [],
@@ -93,15 +98,13 @@ export async function createFreshAgent(
   }
   if (skills.length > 0) console.log(`[agent] ${role} 已加载 skills: ${skills.map((skill) => skill.name).join(", ")}`);
 
-  // 扩展加载失败不阻断编排（扩展是增强件），但必须显式告警——否则 MCP 静默失效难排查
-  if (opts.extensions) {
-    const { extensions, errors } = resourceLoader.getExtensions();
-    if (errors.length > 0) {
-      for (const e of errors) console.warn(`[agent] 扩展加载失败: ${e.path} — ${e.error}`);
-    }
-    const loaded = extensions.map((e) => e.sourceInfo?.source || e.path);
-    if (loaded.length > 0) console.log(`[agent] ${role} 已加载扩展: ${loaded.join(", ")}`);
+  // 内联扩展加载失败必须显式告警，避免空 docs 或 MCP 名称段静默失效。
+  const { extensions, errors } = resourceLoader.getExtensions();
+  if (errors.length > 0) {
+    for (const e of errors) console.warn(`[agent] 扩展加载失败: ${e.path} — ${e.error}`);
   }
+  const loaded = extensions.map((e) => e.sourceInfo?.source || e.path);
+  if (loaded.length > 0) console.log(`[agent] ${role} 已加载扩展: ${loaded.join(", ")}`);
 
   const { session } = await createAgentSession({
     cwd,
@@ -121,15 +124,12 @@ export async function createFreshAgent(
     noTools: opts.builtinTools ? undefined : "builtin",
     excludeTools: opts.excludeTools,
   });
-  // SDK 的 createAgentSession 不会派发 session_start（pi CLI 的 print/json 模式才显式 bind）；
-  // pi-mcp-adapter 等扩展靠该事件进入运行态（项目级 .mcp.json 服务器也仅在此时接纳）。
-  // 以无 UI 的 print 模式绑定，行为对齐 `pi -p` 单轮运行
-  if (opts.extensions) {
-    await session.bindExtensions({
-      mode: "print",
-      onError: (err) => console.error(`[agent] 扩展运行时错误（${err.extensionPath}）: ${err.error}`),
-    });
-  }
+  // createAgentSession 不自动派发 session_start；四角色均有空 docs 内联扩展，统一显式绑定。
+  // EXTENSIONS_*=false 时 noExtensions 会阻止外部扩展，但空 docs 内联扩展仍可用。
+  await session.bindExtensions({
+    mode: "print",
+    onError: (err) => console.error(`[agent] 扩展运行时错误（${err.extensionPath}）: ${err.error}`),
+  });
   return session;
 }
 

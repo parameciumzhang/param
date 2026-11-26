@@ -39,6 +39,8 @@ param 分为 CTF 版和专业企业渗透版，当前仓库为 **CTF 版**。专
 
 ### 长任务-内网渗透评测靶场
 
+项目地址：<https://github.com/inwpu/shadownet-benchmark>
+
 靶场：`nwpucat-V1-内网渗透-By-攻防SRC`
 
 特别感谢**攻防SRC**提供的测试环境

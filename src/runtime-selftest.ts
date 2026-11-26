@@ -4,10 +4,17 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
+import {
+  DefaultResourceLoader,
+  SettingsManager,
+  type BuildSystemPromptOptions,
+  type NormalizedBuildSystemPromptOptions,
+} from "@earendil-works/pi-coding-agent";
 import { config, extensionsForRole } from "./config.js";
 import { kaliExec } from "./kali.js";
 import { loadContestInput } from "./contest-input.js";
 import { loadMcpToolNamesSection, renderMcpToolNamesSection } from "./mcp-tool-names.js";
+import { createEmptyDocsExtension } from "./system-prompt.js";
 
 let assertions = 0;
 function equal(actual: unknown, expected: unknown, message: string): void {
@@ -80,7 +87,76 @@ async function main(): Promise<void> {
     }
   }
 
-  console.log("[runtime-test] 3. MCP 只注入服务器/工具名称");
+  console.log("[runtime-test] 3. 四角色共用的空 docs 覆盖独立于外部扩展");
+  const sdkSystemPromptUrl = pathToFileURL(path.join(
+    config.root,
+    "node_modules",
+    "@earendil-works",
+    "pi-coding-agent",
+    "dist",
+    "core",
+    "system-prompt.js"
+  )).href;
+  const sdkSystemPrompt = await import(sdkSystemPromptUrl) as {
+    buildSystemPrompt(options: BuildSystemPromptOptions): string;
+    normalizeBuildSystemPromptOptions(options: BuildSystemPromptOptions): NormalizedBuildSystemPromptOptions;
+  };
+  const docsFixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), "param-empty-docs-test-"));
+  const docsFixtureAgent = path.join(docsFixtureRoot, "agent");
+  try {
+    const settingsManager = SettingsManager.create(docsFixtureRoot, docsFixtureAgent, { projectTrusted: true });
+    const loader = new DefaultResourceLoader({
+      cwd: docsFixtureRoot,
+      agentDir: docsFixtureAgent,
+      settingsManager,
+      noExtensions: true,
+      extensionFactories: [{ name: "param-empty-docs", factory: createEmptyDocsExtension() }],
+      noSkills: true,
+      noPromptTemplates: true,
+      noThemes: true,
+      noContextFiles: true,
+    });
+    await loader.reload();
+    const loaded = loader.getExtensions();
+    equal(loaded.errors.length, 0, "空 docs 内联扩展加载不得报错");
+    const extension = loaded.extensions.find((entry) => entry.path === "<inline:param-empty-docs>");
+    ok(extension, "noExtensions:true 仍加载项目内联空 docs 扩展");
+    const beforeAgentStart = extension.handlers.get("before_agent_start")?.[0];
+    ok(beforeAgentStart, "空 docs 扩展注册 before_agent_start");
+    const promptOptions = sdkSystemPrompt.normalizeBuildSystemPromptOptions({
+      cwd: docsFixtureRoot,
+      selectedTools: [],
+      appendSystemPrompt: "ROLE-ADDENDUM",
+    });
+    const defaultPrompt = sdkSystemPrompt.buildSystemPrompt(promptOptions);
+    ok(defaultPrompt.includes("Main documentation:"), "覆盖前默认包含 pi 文档索引");
+    await beforeAgentStart({
+      type: "before_agent_start",
+      messageType: "user",
+      prompt: "test",
+      images: [],
+      systemPrompt: defaultPrompt,
+      systemPromptOptions: promptOptions,
+    } as never, {} as never);
+    const compactPrompt = sdkSystemPrompt.buildSystemPrompt(promptOptions);
+    const docsBody = /<docs>\n([\s\S]*?)\n<\/docs>/.exec(compactPrompt)?.[1];
+    equal(docsBody?.trim(), "", "docs 正文覆盖后为空但保留 section 标签");
+    ok(!compactPrompt.includes("Main documentation:"), "默认文档路径索引不再进入上下文");
+    ok(compactPrompt.includes("<tools>"), "空 docs 不影响 tools section");
+    ok(compactPrompt.includes("<rules>"), "空 docs 不影响 rules section");
+    ok(compactPrompt.includes("<addendum>\nROLE-ADDENDUM\n</addendum>"), "空 docs 不影响角色 addendum");
+    ok(compactPrompt.includes("<cwd>"), "空 docs 不影响 cwd section");
+    promptOptions.sections.docs = "";
+    equal(
+      sdkSystemPrompt.buildSystemPrompt(promptOptions).includes("Main documentation:"),
+      true,
+      "回归保护：pi 1.4.0 空字符串会恢复默认 docs，因此实现使用单个空格"
+    );
+  } finally {
+    fs.rmSync(docsFixtureRoot, { recursive: true, force: true });
+  }
+
+  console.log("[runtime-test] 4. MCP 只注入服务器/工具名称");
   const mcpConfigFixture = {
     mcpServers: {
       ctfy: {
@@ -127,8 +203,9 @@ async function main(): Promise<void> {
   const mcpFixtureAgent = path.join(mcpFixtureRoot, "agent");
   try {
     fs.mkdirSync(mcpFixtureAgent);
-    fs.writeFileSync(path.join(mcpFixtureRoot, ".mcp.json"), JSON.stringify(mcpConfigFixture));
     fs.writeFileSync(path.join(mcpFixtureAgent, "mcp-cache.json"), JSON.stringify(mcpCacheFixture));
+    equal(loadMcpToolNamesSection(mcpFixtureAgent, mcpFixtureRoot), undefined, "没有 .mcp.json 时即使存在缓存也不注入名称段");
+    fs.writeFileSync(path.join(mcpFixtureRoot, ".mcp.json"), JSON.stringify(mcpConfigFixture));
     equal(loadMcpToolNamesSection(mcpFixtureAgent, mcpFixtureRoot), mcpNames, "从角色 cwd 与 agentDir 加载名称清单");
     fs.writeFileSync(path.join(mcpFixtureAgent, "mcp-cache.json"), "{broken");
     equal(loadMcpToolNamesSection(mcpFixtureAgent, mcpFixtureRoot), undefined, "缓存损坏不阻断会话");
@@ -136,7 +213,7 @@ async function main(): Promise<void> {
     fs.rmSync(mcpFixtureRoot, { recursive: true, force: true });
   }
 
-  console.log("[runtime-test] 4. 文件/CTF_INPUT 单独及合并输入");
+  console.log("[runtime-test] 5. 文件/CTF_INPUT 单独及合并输入");
   const inputTestDir = fs.mkdtempSync(path.join(os.tmpdir(), "param-input-test-"));
   try {
     const promptFile = path.join(inputTestDir, "ctf.txt");
@@ -160,7 +237,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  console.log("[runtime-test] 5. embedded 本地执行、退出码/输出/cwd 与无 Docker 调用");
+  console.log("[runtime-test] 6. embedded 本地执行、退出码/输出/cwd 与无 Docker 调用");
   const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "param-embedded-test-"));
   const workdir = path.join(temporary, "task-1");
   const fakeBin = path.join(temporary, "bin");
@@ -181,7 +258,7 @@ async function main(): Promise<void> {
     equal(fs.readFileSync(path.join(workdir, "cwd.txt"), "utf8"), workdir, "embedded cwd 是本任务目录");
     equal(fs.existsSync(dockerMarker), false, "embedded 不得调用 docker");
 
-    console.log("[runtime-test] 6. Abort/timeout 只清理本任务进程组");
+    console.log("[runtime-test] 7. Abort/timeout 只清理本任务进程组");
     const controller = new AbortController();
     const survivor = kaliExec("sleep 0.6; printf survivor-ok > survivor.txt", { workdir, timeoutMs: 10_000 });
     const victim = kaliExec("printf '%s' \"$$\" > victim.pid; trap 'exit 143' TERM; while true; do sleep 1; done", { workdir, timeoutMs: 30_000, signal: controller.signal });
