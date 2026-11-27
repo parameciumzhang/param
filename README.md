@@ -27,15 +27,12 @@ param 分为 CTF 版和专业企业渗透版，当前仓库为 **CTF 版**。专
 
 #### 托管运行成绩
 
-![腾讯 TSecBench v1 托管运行成绩 1](assets/all-in-one-1.png)
+![腾讯 TSecBench v1 托管运行成绩 1](assets/tsecbench-1.png)
 
-![腾讯 TSecBench v1 托管运行成绩 2](assets/all-in-one-2.png)
+![腾讯 TSecBench v1 托管运行成绩 2](assets/tsecbench-2.png)
 
-#### 本地运行成绩
+![腾讯 TSecBench v1 托管运行成绩 2](assets/tsecbench-3.png)
 
-![腾讯 TSecBench v1 本地运行成绩 1](assets/local-1.png)
-
-![腾讯 TSecBench v1 本地运行成绩 2](assets/local-2.png)
 
 ### 长任务-内网渗透评测靶场
 
